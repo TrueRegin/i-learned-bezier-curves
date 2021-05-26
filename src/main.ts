@@ -14,6 +14,7 @@ let mousedown = false;
 
 let selectedControl = -1;
 const CIRCLE_RADIUS = 6;
+const INTERACT_RADIUS = CIRCLE_RADIUS * 2.3;
 
 // Main Function
 (() => {
@@ -124,8 +125,8 @@ const CIRCLE_RADIUS = 6;
                 controlPoints[selectedControl][0] = mouseCoords[0];
                 controlPoints[selectedControl][1] = mouseCoords[1];
             }
-            redrawFrame();
         }
+        redrawFrame();
     };
 
     window.onmousedown = (event: MouseEvent) => {
@@ -135,7 +136,7 @@ const CIRCLE_RADIUS = 6;
             let b = mouseCoords[1] - controlPoints[i][1];
             let dist = Math.sqrt(a * a + b * b);
 
-            if (dist < CIRCLE_RADIUS) {
+            if (dist < INTERACT_RADIUS) {
                 selectedControl = i;
                 break;
             }
@@ -149,6 +150,9 @@ const CIRCLE_RADIUS = 6;
     };
 })();
 
+/**
+ * Redraws the bezier curve, bezier control point text, and background.
+ */
 function redrawFrame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000000';
@@ -156,43 +160,25 @@ function redrawFrame() {
     ctx.translate(0 - transform[0], -transform[1]);
     ctx.scale(scale, scale);
 
-    ctx.font = '20px Roboto';
-
-    for (let i = 0; i < controlPoints.length; i++) {
-        let x = controlPoints[i][0];
-        let y = controlPoints[i][1];
-        let tx = x + 10;
-        let ty = y + 10;
-
-        if (tx + 30 < window.innerWidth) tx -= 40;
-        if (ty + 20 < window.innerHeight) ty -= 30;
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.arc(x, y, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#F30A0A';
-        ctx.fillText((i + 1).toString(), x, y);
-    }
+    ctx.font = '40px monospace, bold';
 
     for (let i = 0; i < 4; i += 2) {
         ctx.beginPath();
         ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
         ctx.moveTo(controlPoints[i][0], controlPoints[i][1]);
         ctx.lineTo(controlPoints[i + 1][0], controlPoints[i + 1][1]);
         ctx.stroke();
     }
 
-    ctx.strokeStyle = '#D3D3D3';
+    ctx.strokeStyle = '#FFF';
+    ctx.lineWidth = 3;
     let x = controlPoints[0][0];
     let y = controlPoints[0][1];
     ctx.beginPath();
     ctx.moveTo(x, y);
     const LINE_SEGMENTS = 100;
-    for (let i = 1; i < LINE_SEGMENTS; i++) {
+    for (let i = 1; i < LINE_SEGMENTS + 1; i++) {
         const bezierPoint = cubicBezier(
             controlPoints[0],
             controlPoints[1],
@@ -205,21 +191,97 @@ function redrawFrame() {
         ctx.lineTo(x, y);
     }
     ctx.stroke();
+
+    /**
+     * We want to draw text on the control handles that is ALWAYS on the screen.
+     * 
+     * If we're inside a zone where we can drag a control handle, we want to place an opaque square behind the handle.
+     */
+     for (let i = 0; i < controlPoints.length; i++) {
+        let textPosOnScreen = canvasToScreenSpace(controlPoints[i]);
+        let x = controlPoints[i][0];
+        let y = controlPoints[i][1];
+        let sx = textPosOnScreen[0];
+        let sy = textPosOnScreen[1];
+        let tx = x + 30;
+        let ty = y + 30;
+
+        const text = (i + 1) + "";
+        const textMetrics = ctx.measureText(text);
+        const tWidth = textMetrics.width;
+        const tHeight = textMetrics.emHeightAscent - textMetrics.emHeightDescent;
+
+        // Buffer between the edge of the screen before text gets flopped.
+        const BUFFER = 50;
+        if (sx + tWidth + BUFFER > window.innerWidth) tx -= 70;
+        if (sy + BUFFER > window.innerHeight) ty -= 60;
+
+        /**
+         * Filling in the handles interactable circle if we're hovering in it.
+         */
+        const mouseInCanvasCoords = screenToCanvasSpace(mousePos);
+        // We're going backwards here because the handle in the last index of the array is
+        // Rendered on top of the others (thus it should be interacted with first)
+        for(let i = 3; i >= 0; i--) {
+            if(distance(mouseInCanvasCoords, controlPoints[i]) <= INTERACT_RADIUS) {
+                ctx.fillStyle = "#a3f6"
+                ctx.beginPath();
+                ctx.arc(x, y, INTERACT_RADIUS, 0, 2 * Math.PI, false);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+        }
+
+        /**
+         * Filling in the handle itself.
+         */
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(x, y, CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#F30A0A';
+        ctx.fillText(text.toString(), tx, ty);
+    }
+
     ctx.resetTransform();
 }
 
-// TODO
 /**
  * Transforms a mouse from web window coordinates to the coordinates of our canvas so
  * we can use them to transform the bezier controls fluidly.
+ * 
+ * As a note, this could easily be transformed into a matrix format, just something I was thinking about.
  */
 function screenToCanvasSpace(pos: Vector2D): Vector2D {
     let temp: Vector2D = [...pos];
-    // temp[1] = tem;
     for (let i = 0; i < pos.length; i++) {
         temp[i] += transform[i];
         temp[i] *= 1 / scale;
     }
 
     return temp;
+}
+
+/**
+ * Inverts the function `screenToCanvasSpace` above so we can make
+ * sure the text for the handles doesn't appear offscreen.
+ */
+function canvasToScreenSpace(pos: Vector2D): Vector2D {
+    let temp: Vector2D = [...pos];
+    for (let i = 0; i < pos.length; i++) {
+        temp[i] -= transform[i];
+        temp[i] *= scale;
+    }
+
+    return temp;
+}
+
+function distance(pos1: Vector2D, pos2: Vector2D) {
+    const a = pos1[0] - pos2[0];
+    const b = pos1[1] - pos2[1];
+    return Math.sqrt(a*a + b*b);
 }
