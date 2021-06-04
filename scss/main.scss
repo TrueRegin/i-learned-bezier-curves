@@ -7,3 +7,35 @@ body {
     margin: 0;
     overflow: hidden;
 }
+
+#controls {
+    position: absolute;
+    padding: 10px;
+    background: linear-gradient(to bottom, #fff, #eaeaea);
+    color: #000;
+
+    & > :not(label) {
+        box-shadow: 0 3px 5px #0005;
+    }
+
+    & > label {
+        font-family: "Roboto Light";
+        padding-left: 10px;
+        padding-right: 5px;
+    }
+}
+
+button#split-toggle {
+    border: 1px solid #fff;
+    cursor: pointer;
+    margin-left: 15px;
+}
+
+button {
+    background: #00ed44;
+}
+
+.activated {
+    background: #ed0044;
+    color: #fff;
+}

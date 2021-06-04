@@ -1,4 +1,6 @@
-import { Vector2D, cubicBezier } from './bezier';
+import { Vector2D } from './bezier';
+import { controlsToHermite, hermiteCurve, hermiteDerivative } from './hermite';
+import { vector_direction, vector_divide } from './Vector';
 const canvas = document.querySelector('canvas#canvas') as HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
 const controlPoints: [Vector2D, Vector2D, Vector2D, Vector2D] = [
@@ -16,6 +18,24 @@ let selectedControl = -1;
 const CIRCLE_RADIUS = 6;
 const INTERACT_RADIUS = CIRCLE_RADIUS * 2.3;
 
+/**
+ * Controls + state
+ */
+const $percentControlEl = document.querySelector(
+    'input#split-percent'
+) as HTMLInputElement;
+const $weightControlEl = document.querySelector(
+    'input#split-weight'
+) as HTMLInputElement;
+const $splitToggleEl = document.querySelector(
+    'button#split-toggle'
+) as HTMLButtonElement;
+const split_state = {
+    percent: 0.5,
+    weight: 1,
+    enabled: false,
+};
+
 // Main Function
 (() => {
     canvas.width = window.innerWidth;
@@ -29,6 +49,36 @@ const INTERACT_RADIUS = CIRCLE_RADIUS * 2.3;
     ctx.font = '40px monospace, bold';
 
     redrawFrame();
+    $UpdateSplitToggleText();
+
+    /**
+     * Loading the event listeners for the controls
+     */
+    $percentControlEl.addEventListener('change', () => {
+        split_state.percent = parseFloat($percentControlEl.value);
+        redrawFrame();
+    });
+    $weightControlEl.addEventListener('change', () => {
+        split_state.weight = parseFloat($weightControlEl.value);
+        redrawFrame();
+    });
+    $splitToggleEl.addEventListener('click', () => {
+        if (split_state.enabled) {
+            split_state.enabled = false;
+            $splitToggleEl.classList.remove('activated');
+        } else {
+            split_state.enabled = true;
+            $splitToggleEl.classList.add('activated');
+        }
+        $UpdateSplitToggleText();
+        redrawFrame();
+    });
+
+    function $UpdateSplitToggleText() {
+        $splitToggleEl.innerText = split_state.enabled
+            ? 'Disable split curve overlay.'
+            : 'Enable split curve overlay.';
+    }
 
     /**
      * On window resize make sure the canvas always fits the screen
@@ -42,7 +92,7 @@ const INTERACT_RADIUS = CIRCLE_RADIUS * 2.3;
     /**
      * If you press the keys 1, 2, 3 or 4 the corresponding handle moves to your mouse position.
      */
-    window.addEventListener('keydown', (event: KeyboardEvent) => {
+    canvas.addEventListener('keydown', (event: KeyboardEvent) => {
         for (let i = 0; i < 4; i++) {
             if (event.key === (i + 1).toString()) {
                 const transformedMousePos = screenToCanvasSpace(mousePos);
@@ -60,7 +110,7 @@ const INTERACT_RADIUS = CIRCLE_RADIUS * 2.3;
      *
      * ! That code is partially broken at the moment !
      */
-    window.addEventListener('keydown', (event: KeyboardEvent) => {
+    canvas.addEventListener('keydown', (event: KeyboardEvent) => {
         console.log(event.key);
         if (event.key == 'Escape') {
             // The number of iterations since the zoom start.
@@ -104,7 +154,7 @@ const INTERACT_RADIUS = CIRCLE_RADIUS * 2.3;
      *
      * The negative before `event.deltaY` is because scrolling in is by default -100 which would zoom us in not out.
      */
-    window.onwheel = (event: WheelEvent) => {
+    canvas.onwheel = (event: WheelEvent) => {
         console.log(event.deltaY, {});
         scale += -event.deltaY / 500;
         if (scale < 0.3) scale = 0.3;
@@ -116,7 +166,7 @@ const INTERACT_RADIUS = CIRCLE_RADIUS * 2.3;
      * We want to pan the camera when the mouse is down and the mouse is moving.
      * We don't pan the camera when a handle is selected.
      */
-    window.onmousemove = (event: MouseEvent) => {
+    canvas.onmousemove = (event: MouseEvent) => {
         mousePos[0] = event.pageX;
         mousePos[1] = event.pageY;
 
@@ -135,7 +185,7 @@ const INTERACT_RADIUS = CIRCLE_RADIUS * 2.3;
         redrawFrame();
     };
 
-    window.onmousedown = (event: MouseEvent) => {
+    canvas.onmousedown = (event: MouseEvent) => {
         let mouseCoords = screenToCanvasSpace([event.clientX, event.clientY]);
         for (let i = 3; i >= 0; i--) {
             let a = mouseCoords[0] - controlPoints[i][0];
@@ -185,27 +235,78 @@ function redrawFrame() {
 
     /**
      * We want to draw the bezier curve onto the screen next.
+     * ! This is where we draw the curve onto the screen !
      */
-    ctx.strokeStyle = '#FFF';
-    ctx.lineWidth = 3;
-    let x = controlPoints[0][0];
-    let y = controlPoints[0][1];
-    ctx.beginPath();
-    ctx.moveTo(x, y);
     const LINE_SEGMENTS = 100;
-    for (let i = 1; i < LINE_SEGMENTS + 1; i++) {
-        const bezierPoint = cubicBezier(
-            controlPoints[0],
-            controlPoints[1],
-            controlPoints[2],
-            controlPoints[3],
-            i / LINE_SEGMENTS
-        );
-        x = bezierPoint[0];
-        y = bezierPoint[1];
-        ctx.lineTo(x, y);
-    }
+    const hermite_points = controlsToHermite(controlPoints);
+    drawHermiteCurve(hermite_points, LINE_SEGMENTS, '#fff', 3);
+
+    /**
+     * We want to draw on the tangent vector + circle to the hermite curve at our split point
+     * so we can verify everything is going well.
+     */
+    const splitPoint = hermiteCurve(
+        hermite_points[0],
+        hermite_points[1],
+        hermite_points[2],
+        hermite_points[3],
+        split_state.percent
+    );
+    const splitTangent = hermiteDerivative(
+        hermite_points[0],
+        hermite_points[1],
+        hermite_points[2],
+        hermite_points[3],
+        split_state.percent
+    );
+    ctx.strokeStyle = '#0A731B';
+    ctx.beginPath();
+    ctx.moveTo(splitPoint[0], splitPoint[1]);
+    ctx.lineTo(
+        splitPoint[0] + splitTangent[0],
+        splitPoint[1] + splitTangent[1]
+    );
     ctx.stroke();
+
+    ctx.fillStyle = '#11BA2C';
+    ctx.beginPath();
+    ctx.arc(splitPoint[0], splitPoint[1], CIRCLE_RADIUS, 0, 2 * Math.PI, false);
+    ctx.closePath();
+    ctx.fill();
+
+    /**
+     * We want to draw the 2 split curves if the "Enable split curve overlay" option
+     * is enabled.
+     */
+    // Using the call method on the function for code simplicity, nothing more.
+    const startDerivative: Vector2D = hermiteDerivative.call(
+        undefined,
+        ...hermite_points,
+        0
+    );
+    const endDerivative: Vector2D = hermiteDerivative.call(
+        undefined,
+        ...hermite_points,
+        1
+    );
+
+    if (split_state.enabled) {
+        let points1 = [
+            controlPoints[0], // Startpoint
+            splitPoint, // Endpoint
+            vector_divide(startDerivative, split_state.weight) as Vector2D, // Startpoint Tangent
+            vector_divide(splitTangent, split_state.weight) as Vector2D, // Endpoint Tangent
+        ];
+        let points2 = [
+            splitPoint, // Startpoint
+            controlPoints[3], // Endpoint
+            vector_divide(splitTangent, split_state.weight) as Vector2D, // Startpoint Tangent
+            vector_divide(endDerivative, split_state.weight) as Vector2D, // Endpoint Tangent
+        ];
+
+        drawHermiteCurve(points1, 100, '#ea5533', 1);
+        drawHermiteCurve(points2, 100, '#3333ff', 1);
+    }
 
     /**
      * We want to draw text on the control handles that is ALWAYS on the screen.
@@ -250,7 +351,7 @@ function redrawFrame() {
         /**
          * If we're hovering over a handle, queue the redrawing of that handle with an opaque selector circle
          * under it FOR LATER. (Code is after this for loop)
-         * 
+         *
          * NOTE: If we already are selecting a handle, we don't do anything here.
          */
         if (
@@ -282,12 +383,14 @@ function redrawFrame() {
     /**
      * We draw the selection circle + the actual circle of a handle we're hovering over after we draw the handles at
      * first. Otherwise there will be issues with what handle appears on top because of the drawing order.
-     * 
+     *
      * the selected control handle (one we're dragging) takes priority over the
      * hovered control handle (one we're hovering over).
      */
+    let x = 0,
+        y = 0;
     if (circledrawn !== -1 || selectedControl !== -1) {
-        if(circledrawn === -1) circledrawn = selectedControl;
+        if (circledrawn === -1) circledrawn = selectedControl;
         x = controlPoints[circledrawn][0];
         y = controlPoints[circledrawn][1];
         ctx.fillStyle = '#9cfaff99';
@@ -309,6 +412,33 @@ function redrawFrame() {
     }
 
     ctx.resetTransform();
+}
+
+function drawHermiteCurve(
+    control_points: Vector2D[],
+    segments: number,
+    color = '#fff',
+    width = 1
+) {
+    let x = control_points[0][0];
+    let y = control_points[0][1];
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    for (let i = 1; i < segments + 1; i++) {
+        const bezierPoint = hermiteCurve(
+            control_points[0],
+            control_points[1],
+            control_points[2],
+            control_points[3],
+            i / segments
+        );
+        x = bezierPoint[0];
+        y = bezierPoint[1];
+        ctx.lineTo(x, y);
+    }
+    ctx.stroke();
 }
 
 /**
