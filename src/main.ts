@@ -3,11 +3,12 @@ import { controlsToHermite, hermiteCurve, hermiteDerivative } from './hermite';
 import { vector_direction, vector_divide } from './Vector';
 const canvas = document.querySelector('canvas#canvas') as HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
+const CONTROL_POINT_PADDING = 150;
 const controlPoints: [Vector2D, Vector2D, Vector2D, Vector2D] = [
-    [20, window.innerHeight],
-    [20, 20],
-    [window.innerWidth - 20, 20],
-    [window.innerWidth - 20, window.innerHeight],
+    [CONTROL_POINT_PADDING, window.innerHeight - CONTROL_POINT_PADDING],
+    [CONTROL_POINT_PADDING, CONTROL_POINT_PADDING],
+    [window.innerWidth - CONTROL_POINT_PADDING, CONTROL_POINT_PADDING],
+    [window.innerWidth - CONTROL_POINT_PADDING, window.innerHeight - CONTROL_POINT_PADDING],
 ];
 const mousePos: [number, number] = [0, 0];
 let transform: [number, number] = [0, 0];
@@ -335,7 +336,21 @@ function redrawFrame() {
         /**
          * Text coordinates for calculations
          */
-        const text = i + 1 + '';
+        let text = "";
+        switch(i + 1) {
+            case 1:
+                text = "P1"
+                break;
+            case 2:
+                text = "T1"
+                break;
+            case 3:
+                text = "T2"
+                break;
+            case 4:
+                text = "P2"
+                break;
+        }
         const textMetrics = ctx.measureText(text);
         const tWidth = textMetrics.width;
         // Buffer between the edge of the screen before text gets flopped.
@@ -345,7 +360,7 @@ function redrawFrame() {
          * If the control handle number on the left or bottom went off the screen we move it to the
          * top of the control handle or to the right of it (or both if that applies)
          */
-        if (sx + tWidth + BUFFER > window.innerWidth) tx -= 70;
+        if (sx + tWidth + BUFFER > window.innerWidth) tx -= 90;
         if (sy + BUFFER > window.innerHeight) ty -= 60;
 
         /**
