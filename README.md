@@ -1,20 +1,25 @@
-# I Learned Bezier Curves
-I did a bit of learning about beziers and how to use them today, turns out they're really dang simple
-So this is a program that allows you to control a cubic bezier curve, it's called cubic because the formula used to create it has a t-cubed(t^3) in it.
+# Hermite Curves
+This is a modified version of the main bezier curve app that draws hermite curves instead.
 
-Check out a **working example** at [https://i-learned-bezier-curves.netlify.app/](https://i-learned-bezier-curves.netlify.app/)
+I made it to try and prove whether or not you could split a hermite curve using just the tangent + split point.
 
-## Analysis
-From my learning of beziers I noticed there's really two parts to understand.
-1. Why do they work, what is the intuition?
-2. How to implement them in code + in practice.
+My hypothesis was wrong, you cannot split a hermite curve in that fashion, you can see what I found yourself with this app using the default `t` + `weight settings`.
 
-Another interesting find I had was that the multiplication of each of the points follows the binomial theorem format of (a+b)ⁿ. For quadratic beziers the formula is **(1-t)²** * L1(t) + **(1-t) * (t)** * L2(t) + **(t)²** * L3(t).
+## What Are Hermite Curves?
+They are curves determined by 2 points and 2 tangent vectors. The curve must go through both the points and the tangent vectors of the curve at those 2 points much match their corresponding tangent vectors.
 
-I wouldn't be able to type out the cubic formula in a simplistic fashion as I did for the quadratic one, but if you understand the binomial theorem, and you've seen the simplified cubic equation formula, then hopefully you see the correlation I'm trying to present.
+So why do we want to know about hermite curves?
 
-And that's about all I analyzed in search of Bezier curves.
+The tangent vector property of hermite curves relates them to bezier curves. This property is very useful when it comes to splitting a bezier curve and also helps with the intuition behind why it's easy to split them.
 
-## Learn For Yourself
+## Usage
+To use the app there are 3 controls you have access to.
+1. `t` - This is the percentage along the curve you want to split at between the range `[0, 1]`. Note
+2. `weight` - This is the amount the 2 tangent vectors in both new hermite curves are divided by. For instance the tangent vector `<3, 0, 6>` at weight 3 would become `<1, 0, 2>`.
+3. `Toggle overlay` - This controls whether or not to show what the 2 split curves would look like if you used the split point on the curve + its tangent to create 2 new hermite curves.
 
-If you want to learn bezier curves, check out this cool tutorial online [Bezier Curves Explained](https://www.youtube.com/watch?v=pnYccz1Ha34&t=55s). Trust me it's super high quality and the animations are really helpful in understanding the many cases of beziers, not just the cubic ones.
+## Running
+Install vite globally `npm install -g vite`
+Run `vite` in the command prompt in the root folder of the project and vite will load a site on localhost for you to use.
+
+[Learn more about Vite]https://vitejs.dev/guide/why.html)
